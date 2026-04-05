@@ -24,7 +24,7 @@ from flask import request, Flask, current_app
 from flask_restx import Resource, fields
 from bson.objectid import ObjectId
 from order_service.app.models import api, order_model, delivery_address_model
-
+from datetime import datetime
 # The current_app variable is a proxy to the Flask application handling the request.
 current_app: Flask
 
@@ -107,6 +107,11 @@ class OrderList(Resource):
 
         # Generate a unique orderId
         data['orderId'] = str(uuid.uuid1())
+
+        current_time = datetime.utcnow()
+        data['createdAt'] = current_time
+        data['updatedAt'] = current_time
+
         order_id: ObjectId = orders_collection.insert_one(data).inserted_id
         order: dict = orders_collection.find_one({'_id': ObjectId(order_id)})
         return order, 201
@@ -170,8 +175,14 @@ class OrderStatus(Resource):
         if not old_order:
             api.abort(404, "Order not found")
 
-        orders_collection.update_one({'orderId': id}, {'$set': {'orderStatus':
-            data['orderStatus']}})
+        current_time = datetime.utcnow()
+        orders_collection.update_one(
+            {'orderId': id},
+             {'$set': {
+                'orderStatus': data['orderStatus'],
+                'updatedAt': current_time
+             }}
+        )
         new_order: dict = orders_collection.find_one({'orderId': id})
 
         return [old_order, new_order]
@@ -239,6 +250,7 @@ class OrderDetails(Resource):
         if not old_order:
             api.abort(404, "Order not found")
 
+        data['updatedAt'] = datetime.utcnow()
         orders_collection.update_one({'orderId': id}, {'$set': data})
         new_order: dict = orders_collection.find_one({'orderId': id})
 
