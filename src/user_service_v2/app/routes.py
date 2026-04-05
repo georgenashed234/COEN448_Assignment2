@@ -106,7 +106,7 @@ class User(Resource):
     """
     @api.expect(user_model)
     @api.marshal_with(user_model)
-    def put(self) -> list:
+    def put(self, id: str) -> list:
         """
         Update user information based on the provided user ID.
         Args:

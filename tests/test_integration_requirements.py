@@ -126,7 +126,8 @@ class Testorders:
         r = requests.post(f"{API_url}/users/", json=payload)
         assert r.status_code == 201
         return r.json()
-#Testing creating an order
+
+    # Testing creating an order
     def test_create_order(self):
         user = self.create_user()
 
@@ -135,7 +136,7 @@ class Testorders:
             "items": [{"itemId": "x", "quantity": 1, "price": 10}],
             "userEmails": user["emails"],
             "deliveryAddress": user["deliveryAddress"],
-            "orderStatus": "processing"
+            "orderStatus": "under process"
         }
 
         r = requests.post(f"{API_url}/orders/", json=order)
@@ -144,10 +145,33 @@ class Testorders:
         assert "orderId" in dt
         assert dt["orderId"]
 
-    def test_order_contains_user_reference(self):
-        # TODO: Implement test for order containing user reference
-        pass
-#Ensuring the order is in DB
+    def test_order_contains_user_reference(self, mongo):
+        user = self.create_user()
+
+        order = {
+            "userId": user["userId"],
+            "items": [{"itemId": "x", "quantity": 1, "price": 10}],
+            "userEmails": user["emails"],
+            "deliveryAddress": user["deliveryAddress"],
+            "orderStatus": "under process"
+        }
+
+        r = requests.post(f"{API_url}/orders/", json=order)
+        assert r.status_code == 201
+
+        created_order = r.json()
+        assert created_order["userId"] == user["userId"]
+        assert created_order["userEmails"] == user["emails"]
+        assert created_order["deliveryAddress"] == user["deliveryAddress"]
+
+        time.sleep(1)
+        db_order = mongo.orders.find_one({"orderId": created_order["orderId"]})
+        assert db_order is not None
+        assert db_order["userId"] == user["userId"]
+        assert db_order["userEmails"] == user["emails"]
+        assert db_order["deliveryAddress"] == user["deliveryAddress"]
+
+    # Ensuring the order is in DB
     def test_order_persisted_in_mongo(self, mongo):
         user = self.create_user()
 
@@ -156,7 +180,7 @@ class Testorders:
             "items": [{"itemId": "x", "quantity": 1, "price": 10}],
             "userEmails": user["emails"],
             "deliveryAddress": user["deliveryAddress"],
-            "orderStatus": "processing"
+            "orderStatus": "under process"
         }
 
         r = requests.post(f"{API_url}/orders/", json=order)
@@ -164,18 +188,19 @@ class Testorders:
         order_id = r.json()["orderId"]
 
         time.sleep(1)
-        
+
         db_order = mongo.orders.find_one({"orderId": order_id})
         assert db_order is not None
         assert db_order["userId"] == user["userId"]
-#Testing orders with invalid user
+
+    # Testing orders with invalid user
     def test_order_with_invalid_user(self):
         order = {
             "userId": "fakeusr",
             "items": [{"itemId": "x", "quantity": 1, "price": 10}],
             "userEmails": ["fake@test.com"],
             "deliveryAddress": {},
-            "orderStatus": "processing"
+            "orderStatus": "under process"
         }
 
         r = requests.post(f"{API_url}/orders/", json=order)
@@ -184,11 +209,68 @@ class Testorders:
 
 class Testeventflow:
 
-    def test_user_update_propagates(self):
-        # TODO: Implement test for user update propagation
-        pass
+    def test_user_update_propagates(self, mongo):
+        uid = str(uuid.uuid4())[:8]
 
+        user_payload = {
+            "firstName": "Event",
+            "lastName": "Tester",
+            "emails": [f"event_{uid}@gmail.com"],
+            "deliveryAddress": {
+                "street": "123 Main",
+                "city": "Montreal",
+                "state": "QC",
+                "postalCode": "H3G1M8",
+                "country": "Canada"
+            }
+        }
 
+        create_user_resp = requests.post(f"{API_url}/users/", json=user_payload)
+        assert create_user_resp.status_code == 201
+        user = create_user_resp.json()
+
+        order_payload = {
+            "userId": user["userId"],
+            "items": [{"itemId": "x", "quantity": 1, "price": 10}],
+            "userEmails": user["emails"],
+            "deliveryAddress": user["deliveryAddress"],
+            "orderStatus": "under process"
+        }
+
+        create_order_resp = requests.post(f"{API_url}/orders/", json=order_payload)
+        assert create_order_resp.status_code == 201
+        order = create_order_resp.json()
+
+        updated_emails = [f"updated_{uid}@gmail.com"]
+        updated_address = {
+            "street": "456 Updated St",
+            "city": "Laval",
+            "state": "QC",
+            "postalCode": "H7A1A1",
+            "country": "Canada"
+        }
+
+        update_payload = {
+            "emails": updated_emails,
+            "deliveryAddress": updated_address
+        }
+
+        update_resp = requests.put(f"{API_url}/users/{user['userId']}", json=update_payload)
+        assert update_resp.status_code == 200
+
+        propagated = False
+        for _ in range(10):
+            db_order = mongo.orders.find_one({"orderId": order["orderId"]})
+            if (
+                db_order is not None
+                and db_order.get("userEmails") == updated_emails
+                and db_order.get("deliveryAddress") == updated_address
+            ):
+                propagated = True
+                break
+            time.sleep(1)
+
+        assert propagated, "Updated user info was not propagated to the order"
 class Testgateway:
 
     def test_gateway_health(self):

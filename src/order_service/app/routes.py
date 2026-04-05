@@ -74,6 +74,17 @@ class OrderList(Resource):
         if 'orderStatus' not in data:
             api.abort(400, 'orderStatus is a required field')
 
+        if data['orderStatus'] not in ['under process', 'shipping', 'delivered']:
+            api.abort(400, 'Invalid or missing orderStatus')
+
+        if 'userId' not in data or not data['userId']:
+            api.abort(400, 'userId is a required field')
+
+        users_collection = current_app.users_collection
+        existing_user = users_collection.find_one({'userId': data['userId']})
+        if not existing_user:
+            api.abort(404, 'User not found')
+
         # Validate items
         for item in data['items']:
             if not isinstance(item, dict):
@@ -135,7 +146,7 @@ class OrderStatus(Resource):
                                      enum=['under process', 'shipping', 'delivered'])
     }))
     @api.marshal_with(order_model)
-    def put(self) -> dict:
+    def put(self, id: str) -> dict:
         """
         Update the status of an existing order based on the provided order ID.
         Args:
@@ -178,7 +189,7 @@ class OrderDetails(Resource):
                                          'The delivery address of the user')
     }))
     @api.marshal_with(order_model)
-    def put(self) -> dict:
+    def put(self, id: str) -> dict:
         """
         Update the emails or delivery address of an existing order based on the provided 
         order ID.

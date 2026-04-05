@@ -1,0 +1,6 @@
+#!/Users/rohankumar/Desktop/COEN448/Assignment_2/COEN448_Assignment2/.venv/bin/python
+import sys
+from pytest import console_main
+if __name__ == '__main__':
+    sys.argv[0] = sys.argv[0].removesuffix('.exe')
+    sys.exit(console_main())

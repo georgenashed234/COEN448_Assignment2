@@ -5,6 +5,7 @@ import pymongo
 import pika
 import subprocess
 import time
+import uuid
 from dotenv import load_dotenv
 
 # Load environment variables
@@ -62,10 +63,11 @@ def mongo_client():
 # Test: User Creation
 def test_user_creation(api_base_url, mongo_client):
     # Create a new user
+    unique_id = str(uuid.uuid4())[:8]
     user_payload = {
         "firstName": "Integration",
         "lastName": "Tester",
-        "emails": ["integration.test@example.com"],
+        "emails": [f"integration.test.{unique_id}@example.com"],
         "deliveryAddress": {
             "street": "123 Test Street",
             "city": "Testville",
@@ -92,7 +94,7 @@ def test_user_creation(api_base_url, mongo_client):
     users_collection = users_db["users"]
     user = users_collection.find_one({"userId": created_user["userId"]})
     assert user is not None
-    assert user["emails"] == ["integration.test@example.com"]
+    assert user["emails"] == user_payload["emails"]
 
 # Test: User Update
 def test_user_update(api_base_url, mongo_client):
